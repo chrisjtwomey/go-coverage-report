@@ -10,7 +10,7 @@ import (
 )
 
 var usage = strings.TrimSpace(fmt.Sprintf(`
-Usage: %s [OPTIONS] <OLD_COVERAGE_FILE> <NEW_COVERAGE_FILE> <CHANGED_FILES_FILE>
+Usage: %s [OPTIONS] <OLD_COVERAGE_FILE> <NEW_COVERAGE_FILE> <APP_NAME> <CHANGED_FILES_FILE>
 
 Parse the OLD_COVERAGE_FILE and NEW_COVERAGE_FILE and compare the coverage of the
 files listed in CHANGED_FILES_FILE. The result is printed to stdout as a simple
@@ -25,6 +25,7 @@ packages with a different name than their directory are not supported.
 ARGUMENTS:
   OLD_COVERAGE_FILE   The path to the old coverage file in the format produced by go test -coverprofile
   NEW_COVERAGE_FILE   The path to the new coverage file in the same format as OLD_COVERAGE_FILE
+  APP_NAME			  The name of the application to use in the report
   CHANGED_FILES_FILE  The path to the file containing the list of changed files encoded as JSON string array
 
 OPTIONS:
@@ -54,13 +55,13 @@ func main() {
 	}
 }
 
-func programArgs() (oldCov, newCov, changedFile string, opts options) {
+func programArgs() (oldCov, newCov, appName string, changedFile string, opts options) {
 	flag.Parse()
 
 	args := flag.Args()
-	if len(args) != 3 {
+	if len(args) != 4 {
 		if len(args) > 0 {
-			log.Printf("ERROR: Expected exactly 3 arguments but got %d\n\n", len(args))
+			log.Printf("ERROR: Expected exactly 4 arguments but got %d\n\n", len(args))
 		}
 		flag.Usage()
 		os.Exit(1)
@@ -72,10 +73,10 @@ func programArgs() (oldCov, newCov, changedFile string, opts options) {
 		format: flag.Lookup("format").Value.String(),
 	}
 
-	return args[0], args[1], args[2], opts
+	return args[0], args[1], args[2], args[3], opts
 }
 
-func run(oldCovPath, newCovPath, changedFilesPath string, opts options) error {
+func run(oldCovPath, newCovPath, appName string, changedFilesPath string, opts options) error {
 	oldCov, err := ParseCoverage(oldCovPath)
 	if err != nil {
 		return fmt.Errorf("failed to parse old coverage: %w", err)
@@ -96,7 +97,7 @@ func run(oldCovPath, newCovPath, changedFilesPath string, opts options) error {
 		return nil
 	}
 
-	report := NewReport(oldCov, newCov, changedFiles)
+	report := NewReport(oldCov, newCov, appName, changedFiles)
 	if opts.trim != "" {
 		report.TrimPrefix(opts.trim)
 	}

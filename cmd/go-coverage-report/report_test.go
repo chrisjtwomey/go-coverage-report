@@ -17,10 +17,10 @@ func TestReport_Markdown(t *testing.T) {
 	changedFiles, err := ParseChangedFiles("testdata/01-changed-files.json", "github.com/fgrosse/prioqueue")
 	require.NoError(t, err)
 
-	report := NewReport(oldCov, newCov, changedFiles)
+	report := NewReport(oldCov, newCov, "testApp", changedFiles)
 	actual := report.Markdown()
 
-	expected := `### Merging this branch will **decrease** overall coverage
+	expected := `### Merging this branch will **decrease** testApp coverage
 
 | Impacted Packages | Coverage Δ | :robot: |
 |-------------------|------------|---------|
@@ -56,10 +56,10 @@ func TestReport_Markdown_OnlyChangedUnitTests(t *testing.T) {
 	changedFiles, err := ParseChangedFiles("testdata/02-changed-files.json", "github.com/fgrosse/prioqueue")
 	require.NoError(t, err)
 
-	report := NewReport(oldCov, newCov, changedFiles)
+	report := NewReport(oldCov, newCov, "testApp", changedFiles)
 	actual := report.Markdown()
 
-	expected := `### Merging this branch will **increase** overall coverage
+	expected := `### Merging this branch will **increase** testApp coverage
 
 | Impacted Packages | Coverage Δ | :robot: |
 |-------------------|------------|---------|

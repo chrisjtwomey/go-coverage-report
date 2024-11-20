@@ -11,15 +11,17 @@ import (
 
 type Report struct {
 	Old, New        *Coverage
+	AppName         string
 	ChangedFiles    []string
 	ChangedPackages []string
 }
 
-func NewReport(oldCov, newCov *Coverage, changedFiles []string) *Report {
+func NewReport(oldCov, newCov *Coverage, appName string, changedFiles []string) *Report {
 	sort.Strings(changedFiles)
 	return &Report{
 		Old:             oldCov,
 		New:             newCov,
+		AppName:         appName,
 		ChangedFiles:    changedFiles,
 		ChangedPackages: changedPackages(changedFiles),
 	}
@@ -71,13 +73,13 @@ func (r *Report) Title() string {
 
 	switch {
 	case numIncrease == 0 && numDecrease == 0:
-		return fmt.Sprintln("### Merging this branch will **not change** overall coverage")
+		return fmt.Sprintf("### Merging this branch will **not change** %s coverage\n", r.AppName)
 	case numIncrease > 0 && numDecrease == 0:
-		return fmt.Sprintln("### Merging this branch will **increase** overall coverage")
+		return fmt.Sprintf("### Merging this branch will **increase** %s coverage\n", r.AppName)
 	case numIncrease == 0 && numDecrease > 0:
-		return fmt.Sprintln("### Merging this branch will **decrease** overall coverage")
+		return fmt.Sprintf("### Merging this branch will **decrease** %s coverage\n", r.AppName)
 	default:
-		return fmt.Sprintf("### Merging this branch changes the coverage (%d decrease, %d increase)\n", numDecrease, numIncrease)
+		return fmt.Sprintf("### Merging this branch changes %s coverage (%d decrease, %d increase)\n", r.AppName, numDecrease, numIncrease)
 	}
 }
 

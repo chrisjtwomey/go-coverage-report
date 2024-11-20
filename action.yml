@@ -9,11 +9,15 @@ inputs:
   version:
     description: 'The exact version tag of the go-coverage-report tool to use.'
     required: true
-    default: "v1.2.0"
+    default: "v1.3.0"
 
   sha256sum:
     description: 'Optional SHA256 checksum of the tarball when downloading the go-coverage-report binary.'
     required: false
+  
+  app-name:
+    description: 'Name of the app'
+    required: true
 
   coverage-artifact-name:
     description: 'The name of the artifact containing the code coverage results.'
@@ -72,27 +76,62 @@ runs:
         RUNNER_OS: ${{ runner.os }}
         RUNNER_ARCH: ${{ runner.arch }}
 
-    - name: Determine changed files
-      id: changed-files
-      uses: tj-actions/changed-files@aa08304bd477b800d468db44fe10f6c61f7f7b11 # v42.1.0
-      with:
-        write_output_files: true
-        json: true
-        files: |
-          **.go
-        files_ignore: |
-          vendor/**
-
-    - name: Code coverage report
+    - name: Get new coverage report
+      id: new-coverage-report
       shell: bash
-      id: coverage
-      run: $GITHUB_ACTION_PATH/scripts/github-action.sh "${{ github.repository }}" "${{ github.event.pull_request.number }}" "${{ github.run_id }}"
+      env:
+        GH_REPO: ${{ github.repository }}
+        GH_TOKEN: ${{ github.token }}  
+      run: |
+        gh run download "${{ github.run_id }}" --name=${{ inputs.coverage-artifact-name }} --dir="/tmp/gh-run-download-${{ github.run_id }}"
+        mv "/tmp/gh-run-download-${{ github.run_id }}/${{ inputs.coverage-file-name }}" .github/outputs/new-coverage.txt
+        rm -r "/tmp/gh-run-download-${{ github.run_id }}"
+
+    - name: Get old coverage report
+      id: old-coverage-report
+      shell: bash
       env:
         GH_REPO: ${{ github.repository }}
         GH_TOKEN: ${{ github.token }}
         GITHUB_BASELINE_WORKFLOW_REF: ${{ inputs.github-baseline-workflow-ref }}
-        TARGET_BRANCH: ${{ github.base_ref }}
-        CHANGED_FILES_PATH: .github/outputs/all_modified_files.json
+      run: |
+        WORKFLOW=$(basename "${GITHUB_BASELINE_WORKFLOW_REF%%@*}")
+        LAST_SUCCESSFUL_RUN_IDS=$(gh run list --status=success --branch="${{ github.base_ref }}" --workflow="${WORKFLOW}" --event=push --json=databaseId -q '.[] | .databaseId')
+        if [ -z "$LAST_SUCCESSFUL_RUN_IDS" ]; then
+          echo "::error::No successful run found on the target branch"
+          exit 1
+        fi
+
+        for LAST_SUCCESSFUL_RUN_ID in $LAST_SUCCESSFUL_RUN_IDS; do
+          echo "Trying to download from run ID $LAST_SUCCESSFUL_RUN_ID..."
+          if gh run download "$LAST_SUCCESSFUL_RUN_ID" --name="${{ inputs.coverage-artifact-name }}" --dir="/tmp/gh-run-download-$LAST_SUCCESSFUL_RUN_ID"; then
+            break
+          else
+            echo "Failed to download from run ID $LAST_SUCCESSFUL_RUN_ID, trying next ID..."
+            # fail if we're on our last ID to try
+            if [ "$LAST_SUCCESSFUL_RUN_ID" == "${LAST_SUCCESSFUL_RUN_IDS##*$'\n'}" ]; then
+              echo "::notice::Failed to download coverage results from all successful runs"
+              exit 0
+            fi
+          fi
+        done
+
+        mv "/tmp/gh-run-download-$LAST_SUCCESSFUL_RUN_ID/${{ inputs.coverage-file-name }}" .github/outputs/old-coverage.txt
+        rm -r "/tmp/gh-run-download-$LAST_SUCCESSFUL_RUN_ID"
+
+    - name: Get coverage report files
+      id: coverage-files
+      shell: bash
+      run: $GITHUB_ACTION_PATH/scripts/get-coverage-files.sh ".github/outputs/new-coverage.txt" > .github/outputs/coverage-files.json
+
+    - name: Code coverage report
+      shell: bash
+      id: coverage
+      run: $GITHUB_ACTION_PATH/scripts/github-action.sh "${{ github.repository }}" "${{ github.event.pull_request.number }}" "${{ github.run_id }}" "${{ inputs.app-name }}"
+      env:
+        GH_REPO: ${{ github.repository }}
+        GH_TOKEN: ${{ github.token }}
+        CHANGED_FILES_PATH: .github/outputs/coverage-files.json
         COVERAGE_ARTIFACT_NAME: ${{ inputs.coverage-artifact-name }}
         COVERAGE_FILE_NAME: ${{ inputs.coverage-file-name }}
         ROOT_PACKAGE: ${{ inputs.root-package }}
